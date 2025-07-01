@@ -1,0 +1,76 @@
+name: Contentful Migrations
+
+on:
+  # Se ejecuta cuando se crea un PR que modifica archivos en migrations/
+  pull_request:
+    paths:
+      - 'migrations/**'
+    branches:
+      - develop
+      - qa
+      - staging
+      - main
+
+  # Permite ejecutar manualmente el workflow
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Source branch to promote from'
+        required: true
+        type: choice
+        options:
+          - develop
+          - qa
+          - staging
+      dry_run:
+        description: 'Preview changes without applying them'
+        type: boolean
+        default: true
+        required: false
+
+# Permisos necesarios para comentar en PRs y crear tags
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Job para validar y previsualizar cambios en PRs
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Contentful Migration
+        uses: ./.github/workflows/contentful-migration
+        with:
+          space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
+          management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
+          source-environment: ${{ github.head_ref }}
+          dry-run: true # Siempre en modo preview para PRs
+
+  # Job para promociones manuales entre environments
+  promote-environment:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.source_branch }} # Requiere aprobación según el environment
+    steps:
+      - name: Run Contentful Migration
+        uses: ./.github/workflows/contentful-migration
+        with:
+          space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
+          management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
+          source-environment: ${{ github.event.inputs.source_branch }}
+          dry-run: ${{ github.event.inputs.dry_run }}
+
+  # Job para promociones automáticas después de merge a develop
+  auto-promote-develop:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.base_ref == 'develop'
+    runs-on: ubuntu-latest
+    environment: develop # Requiere aprobación para promoción automática
+    steps:
+      - name: Run Contentful Migration
+        uses: ./.github/workflows/contentful-migration
+        with:
+          space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
+          management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
+          source-environment: develop
+          dry-run: false # Aplica los cambios automáticamente 

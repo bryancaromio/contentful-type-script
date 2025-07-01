@@ -1,0 +1,24 @@
+{
+  "name": "contentful-migrations-project",
+  "version": "1.0.0",
+  "description": "Contentful content model migrations",
+  "main": "src/migrate.js",
+  "scripts": {
+    "sync": "node src/sync-environments.js sync",
+    "sync:check": "node src/sync-environments.js check",
+    "sync:preview": "DRY_RUN=true node src/sync-environments.js sync",
+    "sync:dev": "node src/sync-environments.js sync develop",
+    "sync:qa": "node src/sync-environments.js sync qa",
+    "sync:staging": "node src/sync-environments.js sync staging",
+    "check:dev": "node src/sync-environments.js check develop",
+    "check:qa": "node src/sync-environments.js check qa",
+    "check:staging": "node src/sync-environments.js check staging"
+  },
+  "dependencies": {
+    "contentful-migration": "^4.17.2",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+} 

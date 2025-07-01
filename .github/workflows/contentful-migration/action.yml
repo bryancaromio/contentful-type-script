@@ -1,0 +1,190 @@
+name: 'Contentful Migration Action'
+description: 'Manages Contentful content model migrations between environments'
+author: 'Wynn'
+
+inputs:
+  space-id:
+    description: 'Contentful Space ID'
+    required: true
+  management-token:
+    description: 'Contentful Management Token'
+    required: true
+  source-environment:
+    description: 'Source branch/environment (develop, qa, staging, main)'
+    required: true
+  node-version:
+    description: 'Node.js version to use'
+    default: '20.19.0'
+  dry-run:
+    description: 'Whether to perform a dry run (no changes applied)'
+    default: 'true'
+  github-token:
+    description: 'GitHub token for PR comments'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  migration-status:
+    description: 'Status of the migration (success/failure)'
+    value: ${{ steps.migration.outputs.status }}
+  changes-detected:
+    description: 'Whether changes were detected between environments'
+    value: ${{ steps.preview.outputs.changes-detected }}
+  migration-summary:
+    description: 'Summary of the migration changes'
+    value: ${{ steps.preview.outputs.summary }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'pnpm'
+    
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: latest
+    
+    - name: Install dependencies
+      shell: bash
+      run: |
+        pnpm install --frozen-lockfile
+        pnpm add -g contentful-cli
+
+    - name: Get target environment
+      shell: bash
+      id: get-target
+      run: |
+        # Define the promotion path
+        case "${{ inputs.source-environment }}" in
+          "develop")
+            echo "target_env=qa" >> $GITHUB_OUTPUT
+            ;;
+          "qa")
+            echo "target_env=staging" >> $GITHUB_OUTPUT
+            ;;
+          "staging")
+            echo "target_env=main" >> $GITHUB_OUTPUT
+            ;;
+          "main")
+            echo "❌ Error: Cannot promote from main environment"
+            exit 1
+            ;;
+          *)
+            echo "❌ Error: Invalid source environment: ${{ inputs.source-environment }}"
+            echo "Valid environments are: develop, qa, staging"
+            exit 1
+            ;;
+        esac
+
+    - name: Validate environments
+      shell: bash
+      id: validate
+      env:
+        CONTENTFUL_SPACE_ID: ${{ inputs.space-id }}
+        CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.management-token }}
+      run: |
+        echo "🔍 Validating environments:"
+        echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
+        node src/validate-migration.js "${{ inputs.source-environment }}"
+
+    - name: Generate migration preview
+      shell: bash
+      id: preview
+      if: success()
+      env:
+        CONTENTFUL_SPACE_ID: ${{ inputs.space-id }}
+        CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.management-token }}
+      run: |
+        echo "🔍 Generating preview for environments:"
+        echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
+        
+        # Run preview and capture output
+        PREVIEW_OUTPUT=$(pnpm run sync:preview -- "${{ inputs.source-environment }}" 2>&1)
+        
+        # Check if changes were detected
+        if echo "$PREVIEW_OUTPUT" | grep -q "No changes detected"; then
+          echo "changes-detected=false" >> $GITHUB_OUTPUT
+          echo "summary=No changes detected between environments" >> $GITHUB_OUTPUT
+        else
+          echo "changes-detected=true" >> $GITHUB_OUTPUT
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "$PREVIEW_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Comment PR
+      if: github.event_name == 'pull_request' && inputs.github-token != ''
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const migrationFiles = fs.readdirSync('./migrations')
+            .filter(file => file.endsWith('.js'))
+            .sort((a, b) => b.localeCompare(a));
+          
+          if (migrationFiles.length > 0) {
+            const latestMigration = migrationFiles[0];
+            const migrationContent = fs.readFileSync(`./migrations/${latestMigration}`, 'utf8');
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Migration Preview 🔍
+              
+              Promotion: \`${{ inputs.source-environment }}\` → \`${{ steps.get-target.outputs.target_env }}\`
+              File: \`${latestMigration}\`
+              
+              \`\`\`javascript
+              ${migrationContent}
+              \`\`\`
+              
+              > **Note**: This is a preview. Review the changes carefully before applying them.
+              
+              <details>
+              <summary>Full Preview Output</summary>
+              
+              \`\`\`
+              ${{ steps.preview.outputs.summary }}
+              \`\`\`
+              </details>
+              `
+            });
+          }
+
+    - name: Apply migration
+      shell: bash
+      id: migration
+      if: inputs.dry-run != 'true'
+      env:
+        CONTENTFUL_SPACE_ID: ${{ inputs.space-id }}
+        CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.management-token }}
+      run: |
+        echo "🔄 Applying migration:"
+        echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
+        
+        if pnpm run sync -- "${{ inputs.source-environment }}"; then
+          echo "status=success" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    - name: Create deployment tag
+      if: inputs.dry-run != 'true' && steps.migration.outputs.status == 'success'
+      shell: bash
+      run: |
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        TAG_NAME="contentful_${{ inputs.source-environment }}_to_${{ steps.get-target.outputs.target_env }}_${TIMESTAMP}"
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git tag -a "$TAG_NAME" -m "Contentful migration from ${{ inputs.source-environment }} to ${{ steps.get-target.outputs.target_env }}"
+        git push origin "$TAG_NAME" 
