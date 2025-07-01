@@ -21,8 +21,11 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
       - name: Run Contentful Migration
-        uses: ./.github/workflows/contentful-migration
+        uses: ./.github/workflows/contentful-migration/action.yml
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
@@ -35,8 +38,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name }} # Usa el branch desde el contexto del workflow
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
       - name: Run Contentful Migration
-        uses: ./.github/workflows/contentful-migration
+        uses: ./.github/workflows/contentful-migration/action.yml
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
@@ -49,8 +55,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: develop # Requiere aprobación para promoción automática
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
       - name: Run Contentful Migration
-        uses: ./.github/workflows/contentful-migration
+        uses: ./.github/workflows/contentful-migration/action.yml
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
