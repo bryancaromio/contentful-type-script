@@ -40,16 +40,16 @@ runs:
     - name: Checkout
       uses: actions/checkout@v4
     
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 8.14.0
+    
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
         cache: 'pnpm'
-    
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v2
-      with:
-        version: latest
     
     - name: Install dependencies
       shell: bash
@@ -92,7 +92,8 @@ runs:
       run: |
         echo "🔍 Validating environments:"
         echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
-        node src/validate-migration.js "${{ inputs.source-environment }}"
+        cd $GITHUB_ACTION_PATH
+        node src/validate-migration.js "${{ inputs.source-environment }}" "${{ steps.get-target.outputs.target_env }}"
 
     - name: Generate migration preview
       shell: bash

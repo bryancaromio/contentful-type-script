@@ -1,27 +1,9 @@
 name: Contentful Migrations
 
 on:
-  # Se ejecuta cuando se crea un PR que modifica archivos en migrations/
-  pull_request:
-    paths:
-      - 'migrations/**'
-    branches:
-      - develop
-      - qa
-      - staging
-      - main
-
   # Permite ejecutar manualmente el workflow
   workflow_dispatch:
     inputs:
-      source_branch:
-        description: 'Source branch to promote from'
-        required: true
-        type: choice
-        options:
-          - develop
-          - qa
-          - staging
       dry_run:
         description: 'Preview changes without applying them'
         type: boolean
@@ -51,14 +33,14 @@ jobs:
   promote-environment:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.source_branch }} # Requiere aprobación según el environment
+    environment: ${{ github.ref_name }} # Usa el branch desde el contexto del workflow
     steps:
       - name: Run Contentful Migration
         uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: ${{ github.event.inputs.source_branch }}
+          source-environment: ${{ github.ref_name }}
           dry-run: ${{ github.event.inputs.dry_run }}
 
   # Job para promociones automáticas después de merge a develop
