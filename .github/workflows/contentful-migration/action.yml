@@ -165,8 +165,24 @@ runs:
         echo "🔍 Generating preview for environments:"
         echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
         
-        # Run preview and capture output
-        PREVIEW_OUTPUT=$(pnpm run sync:preview -- "${{ inputs.source-environment }}" 2>&1)
+        # Run preview based on source environment
+        case "${{ inputs.source-environment }}" in
+          "develop")
+            PREVIEW_OUTPUT=$(pnpm run check:dev 2>&1)
+            ;;
+          "qa")
+            PREVIEW_OUTPUT=$(pnpm run check:qa 2>&1)
+            ;;
+          "staging")
+            PREVIEW_OUTPUT=$(pnpm run check:staging 2>&1)
+            ;;
+          *)
+            echo "❌ Error: Invalid source environment: ${{ inputs.source-environment }}"
+            echo "Valid environments are: develop, qa, staging"
+            exit 1
+            ;;
+        esac
+        
         PREVIEW_EXIT_CODE=$?
         
         # Check if changes were detected
