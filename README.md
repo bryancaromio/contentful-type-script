@@ -36,12 +36,12 @@ The system automatically determines the target environment based on the promotio
 
 1. Install dependencies:
 ```bash
-npm install
+pnpm install
 ```
 
 2. Install Contentful CLI globally:
 ```bash
-npm install -g contentful-cli
+pnpm add -g contentful-cli
 ```
 
 3. Authenticate with Contentful:
@@ -66,12 +66,12 @@ To obtain these credentials:
 .
 ├── migrations/           # Migration scripts
 ├── src/
-│   ├── validate-migration.js    # Environment validation logic
-│   ├── migrate.js              # Migration executor
-│   ├── generate-migration.js    # Automatic migration generator
-│   ├── sync-environments.js     # Environment synchronization tool
+│   ├── validate-migration.ts    # Environment validation logic
+│   ├── migrate.ts              # Migration executor
+│   ├── generate-migration.ts    # Automatic migration generator
+│   ├── sync-environments.ts     # Environment synchronization tool
 │   └── utils/
-│       └── environment-mapper.js # GitHub to Contentful environment mapping
+│       └── environment-mapper.ts # GitHub to Contentful environment mapping
 ├── package.json
 └── .env                # Environment configuration (create this file - not included in repo)
 ```
@@ -81,29 +81,29 @@ To obtain these credentials:
 ### Check Environment Differences
 ```bash
 # Check differences with next environment in the promotion flow
-npm run check:dev      # Check differences between develop and qa
-npm run check:qa       # Check differences between qa and staging
-npm run check:staging  # Check differences between staging and main
+pnpm run check:dev      # Check differences between develop and qa
+pnpm run check:qa       # Check differences between qa and staging
+pnpm run check:staging  # Check differences between staging and main
 
 # Preview synchronization (dry-run)
-npm run sync:preview -- develop  # Preview changes that would be applied to qa
+pnpm run sync:preview -- develop  # Preview changes that would be applied to qa
 ```
 
 ### Synchronize Environments
 ```bash
 # Sync to the next environment in the promotion flow
-npm run sync:dev      # Sync from develop to qa
-npm run sync:qa       # Sync from qa to staging
-npm run sync:staging  # Sync from staging to main
+pnpm run sync:dev      # Sync from develop to qa
+pnpm run sync:qa       # Sync from qa to staging
+pnpm run sync:staging  # Sync from staging to main
 ```
 
 ### Custom Synchronization
 ```bash
 # Sync to the next environment (target is determined automatically)
-npm run sync -- develop
+pnpm run sync -- develop
 
 # Or explicitly specify both environments (optional)
-npm run sync -- develop qa
+pnpm run sync -- develop qa
 ```
 
 ## Validation System
@@ -138,17 +138,17 @@ The project includes GitHub Actions workflows that:
 
 1. **Check Differences**
 ```bash
-npm run check:dev  # Will check differences with qa
+pnpm run check:dev  # Will check differences with qa
 ```
 
 2. **Preview Changes**
 ```bash
-npm run sync:preview -- develop  # Will preview changes for qa
+pnpm run sync:preview -- develop  # Will preview changes for qa
 ```
 
 3. **Apply Changes**
 ```bash
-npm run sync:dev  # Will sync to qa
+pnpm run sync:dev  # Will sync to qa
 ```
 
 4. **Validate Results**
@@ -274,6 +274,10 @@ jobs:
 | `node-version` | Node.js version to use | No | '20.19.0' |
 | `dry-run` | Whether to perform a dry run | No | 'true' |
 | `github-token` | GitHub token for PR comments | No | ${{ github.token }} |
+| `fail-on-error` | Whether to fail the workflow if migration validation fails | No | 'true' |
+| `skip-if-no-changes` | Skip migration if no changes detected | No | 'true' |
+| `comment-on-pr` | Whether to comment migration details on PR | No | 'true' |
+| `skip-validation` | Skip environment validation checks (use with caution) | No | 'false' |
 
 ## Outputs
 
@@ -282,6 +286,8 @@ jobs:
 | `migration-status` | Status of the migration (success/failure) |
 | `changes-detected` | Whether changes were detected between environments |
 | `migration-summary` | Summary of the migration changes |
+| `error-message` | Detailed error message if migration failed |
+| `validation-results` | Results of environment validation |
 
 ## Security
 
