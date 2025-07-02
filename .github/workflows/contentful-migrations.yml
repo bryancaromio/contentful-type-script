@@ -49,6 +49,7 @@ jobs:
           fetch-depth: 0  # Fetch all history for proper tagging
       
       - name: Validate migration files
+        if: ${{ !github.event.inputs.skip_validation }}
         run: |
           echo "🔍 Validando archivos de migración..."
           
@@ -77,6 +78,7 @@ jobs:
           fail-on-error: true
           skip-if-no-changes: false
           comment-on-pr: true
+          skip-validation: ${{ github.event.inputs.skip_validation }}
 
   # Job para promociones manuales entre environments
   promote-environment:
@@ -107,6 +109,7 @@ jobs:
           fail-on-error: true
           skip-if-no-changes: true
           comment-on-pr: false
+          skip-validation: ${{ github.event.inputs.skip_validation }}
       
       - name: Create Issue on Failure
         if: failure()

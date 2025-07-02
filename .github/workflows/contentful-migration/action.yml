@@ -34,6 +34,10 @@ inputs:
     description: 'Whether to comment migration details on PR'
     required: false
     default: 'true'
+  skip-validation:
+    description: 'Skip environment validation checks (use with caution)'
+    required: false
+    default: 'false'
 
 outputs:
   migration-status:
@@ -132,6 +136,7 @@ runs:
     - name: Validate environments
       shell: bash
       id: validate
+      if: ${{ inputs.skip-validation != 'true' }}
       env:
         CONTENTFUL_SPACE_ID: ${{ inputs.space-id }}
         CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.management-token }}
@@ -153,6 +158,13 @@ runs:
           echo "❌ Environment validation failed"
           exit 1
         fi
+
+    - name: Set validation results when skipped
+      shell: bash
+      if: ${{ inputs.skip-validation == 'true' }}
+      run: |
+        echo "⚠️ Environment validation was skipped"
+        echo "results=Environment validation was skipped by user request" >> $GITHUB_OUTPUT
 
     - name: Generate migration preview
       shell: bash
