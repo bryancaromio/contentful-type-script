@@ -255,13 +255,17 @@ runs:
           const scriptMatch = fullOutput.match(/=== Script Content ===\n([\s\S]*?)\n=== End of Script ===/);
           const scriptContent = scriptMatch ? scriptMatch[1].trim() : 'No changes detected between environments.';
 
+          // Check if the migration script is empty (only contains the function definition without content)
+          const isEmptyMigration = scriptContent.includes('module.exports = function(migration)') && 
+            !scriptContent.match(/migration\.[a-zA-Z]/); // No migration methods called
+
           const preview = `### Contentful Migration Preview 🔍
 
           #### Environment Promotion
           \`${process.env.SOURCE_ENV}\` → \`${process.env.TARGET_ENV}\`
 
           #### Changes Detected
-          ${process.env.CHANGES_DETECTED === 'true' ? '✅ Yes' : '❌ No'}
+          ${!isEmptyMigration ? '✅ Yes' : '❌ No'}
 
           #### Migration Script
           \`\`\`javascript
