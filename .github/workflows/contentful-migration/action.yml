@@ -165,16 +165,19 @@ runs:
         echo "🔍 Generating preview for environments:"
         echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
         
-        # Run preview based on source environment
+        # Create temporary file for output
+        TEMP_OUTPUT_FILE=$(mktemp)
+        
+        # Run preview based on source environment and capture output while showing it
         case "${{ inputs.source-environment }}" in
           "develop")
-            PREVIEW_OUTPUT=$(pnpm run check:dev 2>&1)
+            pnpm run check:dev 2>&1 | tee "$TEMP_OUTPUT_FILE"
             ;;
           "qa")
-            PREVIEW_OUTPUT=$(pnpm run check:qa 2>&1)
+            pnpm run check:qa 2>&1 | tee "$TEMP_OUTPUT_FILE"
             ;;
           "staging")
-            PREVIEW_OUTPUT=$(pnpm run check:staging 2>&1)
+            pnpm run check:staging 2>&1 | tee "$TEMP_OUTPUT_FILE"
             ;;
           *)
             echo "❌ Error: Invalid source environment: ${{ inputs.source-environment }}"
@@ -183,7 +186,9 @@ runs:
             ;;
         esac
         
-        PREVIEW_EXIT_CODE=$?
+        PREVIEW_EXIT_CODE=${PIPESTATUS[0]}
+        PREVIEW_OUTPUT=$(cat "$TEMP_OUTPUT_FILE")
+        rm -f "$TEMP_OUTPUT_FILE"
         
         # Check if changes were detected
         if echo "$PREVIEW_OUTPUT" | grep -q "No changes detected"; then
