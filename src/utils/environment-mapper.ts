@@ -28,10 +28,11 @@ const GITHUB_ENV_PROMOTION_PATH: Record<Exclude<GithubEnv, 'main'>, GithubEnv> =
  * @throws {Error} If the GitHub environment name is not recognized
  */
 function toContentfulEnv(githubEnv: string): ContentfulEnv {
-  if (!isGithubEnv(githubEnv)) {
+  const normalizedEnv = githubEnv.toLowerCase();
+  if (!isGithubEnv(normalizedEnv)) {
     throw new Error(`Unrecognized GitHub environment: ${githubEnv}. Valid environments are: ${Object.keys(GITHUB_TO_CONTENTFUL_ENV_MAP).join(', ')}`);
   }
-  return GITHUB_TO_CONTENTFUL_ENV_MAP[githubEnv];
+  return GITHUB_TO_CONTENTFUL_ENV_MAP[normalizedEnv as GithubEnv];
 }
 
 /**
@@ -41,10 +42,11 @@ function toContentfulEnv(githubEnv: string): ContentfulEnv {
  * @throws {Error} If the Contentful environment name is not recognized
  */
 function toGithubEnv(contentfulEnv: string): GithubEnv {
-  if (!isContentfulEnv(contentfulEnv)) {
+  const normalizedEnv = contentfulEnv.toLowerCase();
+  if (!isContentfulEnv(normalizedEnv)) {
     throw new Error(`Unrecognized Contentful environment: ${contentfulEnv}. Valid environments are: ${Object.keys(CONTENTFUL_TO_GITHUB_ENV_MAP).join(', ')}`);
   }
-  return CONTENTFUL_TO_GITHUB_ENV_MAP[contentfulEnv];
+  return CONTENTFUL_TO_GITHUB_ENV_MAP[normalizedEnv as ContentfulEnv];
 }
 
 /**
@@ -54,24 +56,25 @@ function toGithubEnv(contentfulEnv: string): GithubEnv {
  * @throws {Error} If the source environment is not valid or has no target
  */
 function getTargetGithubEnv(sourceGithubEnv: string): GithubEnv {
-  if (!isGithubEnv(sourceGithubEnv)) {
+  const normalizedEnv = sourceGithubEnv.toLowerCase();
+  if (!isGithubEnv(normalizedEnv)) {
     throw new Error(`Invalid source environment: ${sourceGithubEnv}. Valid source environments are: ${Object.keys(GITHUB_ENV_PROMOTION_PATH).join(', ')}`);
   }
 
-  if (sourceGithubEnv === 'main') {
+  if (normalizedEnv === 'main') {
     throw new Error('Cannot promote from main environment as it is the highest environment');
   }
 
-  return GITHUB_ENV_PROMOTION_PATH[sourceGithubEnv as Exclude<GithubEnv, 'main'>];
+  return GITHUB_ENV_PROMOTION_PATH[normalizedEnv as Exclude<GithubEnv, 'main'>];
 }
 
 // Type guards
 function isGithubEnv(env: string): env is GithubEnv {
-  return Object.keys(GITHUB_TO_CONTENTFUL_ENV_MAP).includes(env);
+  return Object.keys(GITHUB_TO_CONTENTFUL_ENV_MAP).includes(env.toLowerCase());
 }
 
 function isContentfulEnv(env: string): env is ContentfulEnv {
-  return Object.keys(CONTENTFUL_TO_GITHUB_ENV_MAP).includes(env);
+  return Object.keys(CONTENTFUL_TO_GITHUB_ENV_MAP).includes(env.toLowerCase());
 }
 
 export {

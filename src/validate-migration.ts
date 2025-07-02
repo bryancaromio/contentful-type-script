@@ -3,22 +3,21 @@ import 'dotenv/config';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { toContentfulEnv, ContentfulEnv } from './utils/environment-mapper';
+import { toContentfulEnv, GithubEnv } from './utils/environment-mapper';
 
-// Define strict promotion paths using Contentful environment names
-const ALLOWED_PROMOTIONS: Record<ContentfulEnv, ContentfulEnv[]> = {
-  'development': ['qa'],
-  'qa': ['stage'],
-  'stage': ['master'],
-  'master': []
+// Define strict promotion paths using GitHub environment names
+const ALLOWED_PROMOTIONS: Record<GithubEnv, GithubEnv[]> = {
+  'develop': ['qa'],
+  'qa': ['staging'],
+  'staging': ['main'],
+  'main': []
 };
 
 function validateEnvironments(sourceEnv: string, targetEnv: string): void {
-  // Convert GitHub environment names to Contentful environment names
-  const contentfulSourceEnv = toContentfulEnv(sourceEnv);
-  const contentfulTargetEnv = toContentfulEnv(targetEnv);
+  const normalizedSourceEnv = sourceEnv.toLowerCase() as GithubEnv;
+  const normalizedTargetEnv = targetEnv.toLowerCase() as GithubEnv;
 
-  if (!ALLOWED_PROMOTIONS[contentfulSourceEnv] || !ALLOWED_PROMOTIONS[contentfulSourceEnv].includes(contentfulTargetEnv)) {
+  if (!ALLOWED_PROMOTIONS[normalizedSourceEnv] || !ALLOWED_PROMOTIONS[normalizedSourceEnv].includes(normalizedTargetEnv)) {
     console.error(`
 ❌ Error: Promotion not allowed
    Only the following promotions are allowed:
