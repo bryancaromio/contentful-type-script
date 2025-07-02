@@ -87,6 +87,14 @@ runs:
         echo "🔨 Building TypeScript files..."
         pnpm run build
 
+    - name: Setup directories
+      shell: bash
+      run: |
+        echo "📁 Setting up directories..."
+        mkdir -p migrations
+        chmod 755 migrations
+        touch migrations/.gitkeep
+
     - name: Get target environment
       shell: bash
       id: get-target
@@ -177,7 +185,7 @@ runs:
           echo "EOF" >> $GITHUB_OUTPUT
         fi
         
-        if [ $PREVIEW_EXIT_CODE -ne 0 ] && [ "${{ inputs.fail-on-error }}" == "true" ]; then
+        if [ $PREVIEW_EXIT_CODE -ne 0 ] && [ "${{ inputs.fail-on-error }}" == "true" ]]; then
           echo "❌ Preview generation failed"
           exit 1
         fi
