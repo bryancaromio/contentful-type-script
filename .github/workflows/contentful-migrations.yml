@@ -73,7 +73,7 @@ jobs:
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: ${{ github.base_ref }}
+          source-environment: ${{ github.head_ref }}  # Usamos head_ref para obtener el environment de origen
           node-version: ${{ env.NODE_VERSION }}
           dry-run: true # Siempre en modo preview para PRs
           fail-on-error: true
