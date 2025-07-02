@@ -15,15 +15,6 @@ on:
         type: boolean
         default: true
         required: false
-      source_environment:
-        description: 'Source environment to promote from'
-        type: choice
-        options:
-          - develop
-          - qa
-          - staging
-        required: true
-        default: 'develop'
       skip_validation:
         description: 'Skip environment validation (use with caution)'
         type: boolean
@@ -92,7 +83,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: 
-      name: ${{ github.event.inputs.source_environment }}
+      name: ${{ github.ref_name }}
       url: ${{ steps.migration.outputs.environment_url }}
     outputs:
       migration_status: ${{ steps.migration.outputs.status }}
@@ -110,7 +101,7 @@ jobs:
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: ${{ github.event.inputs.source_environment }}
+          source-environment: ${{ github.ref_name }}
           node-version: ${{ env.NODE_VERSION }}
           dry-run: ${{ github.event.inputs.dry_run }}
           fail-on-error: true
@@ -145,7 +136,7 @@ jobs:
             
             console.log(`Issue creado: ${issue.data.html_url}`);
         env:
-          SOURCE_ENV: ${{ github.event.inputs.source_environment }}
+          SOURCE_ENV: ${{ github.ref_name }}
           TARGET_ENV: ${{ steps.migration.outputs.target_env }}
           ERROR_MESSAGE: ${{ steps.migration.outputs.error }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
