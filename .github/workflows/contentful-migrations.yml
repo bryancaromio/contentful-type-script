@@ -60,11 +60,11 @@ jobs:
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
           source-environment: ${{ github.head_ref }}
           node-version: ${{ env.NODE_VERSION }}
-          dry-run: ${{ github.event.inputs.dry_run }}
+          dry-run: true
           fail-on-error: true
-          skip-if-no-changes: true
-          comment-on-pr: false
-          skip-validation: ${{ github.event.inputs.skip_validation }}
+          skip-if-no-changes: false
+          comment-on-pr: true
+          skip-validation: true
 
   # Job para promociones manuales entre environments
   promote-environment:
