@@ -1,17 +1,18 @@
 name: 'Contentful Migration Action'
-description: 'Manages Contentful content model migrations between environments'
+description: 'Run Contentful migrations'
 author: 'Wynn'
 
 inputs:
-  space-id:
+  contentful-space-id:
     description: 'Contentful Space ID'
     required: true
-  management-token:
+  contentful-management-token:
     description: 'Contentful Management Token'
     required: true
-  source-environment:
-    description: 'Source branch/environment (develop, qa, staging, main)'
+  environment:
+    description: 'Target environment (e.g., master, staging)'
     required: true
+    default: 'master'
   node-version:
     description: 'Node.js version to use'
     default: '20.19.0'
@@ -53,240 +54,241 @@ outputs:
     value: ${{ steps.validate.outputs.results }}
 
 runs:
-  using: "composite"
-  steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Fetch all history for proper tagging
-    
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v4
-      with:
-        version: 8.14.0
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ inputs.node-version }}
-        cache: 'pnpm'
-    
-    - name: Install dependencies
-      shell: bash
-      run: |
-        echo "📦 Installing dependencies..."
-        pnpm install --frozen-lockfile --prefer-offline
-        echo "🔧 Installing contentful-cli globally..."
-        pnpm add -g contentful-cli
-      env:
-        HUSKY: 0  # Disable Husky hooks during CI
+  using: 'node16'
+  main: '../../../src/migrate.ts'
 
-    - name: Get target environment
-      shell: bash
-      id: get-target
-      run: |
-        echo "🎯 Determining target environment..."
-        # Define the promotion path
-        case "${{ inputs.source-environment }}" in
-          "develop")
-            echo "target_env=qa" >> $GITHUB_OUTPUT
-            echo "✅ Target environment: qa"
-            ;;
-          "qa")
-            echo "target_env=staging" >> $GITHUB_OUTPUT
-            echo "✅ Target environment: staging"
-            ;;
-          "staging")
-            echo "target_env=main" >> $GITHUB_OUTPUT
-            echo "✅ Target environment: main"
-            ;;
-          "main")
-            echo "❌ Error: Cannot promote from main environment"
-            if [[ "${{ inputs.fail-on-error }}" == "true" ]]; then
-              exit 1
-            fi
-            ;;
-          *)
-            echo "❌ Error: Invalid source environment: ${{ inputs.source-environment }}"
-            echo "Valid environments are: develop, qa, staging"
-            if [[ "${{ inputs.fail-on-error }}" == "true" ]]; then
-              exit 1
-            fi
-            ;;
-        esac
+branding:
+  icon: 'database'
+  color: 'blue'
 
-    - name: Validate environments
-      shell: bash
-      id: validate
-      env:
-        CONTENTFUL_SPACE_ID: ${{ inputs.space-id }}
-        CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.management-token }}
-      run: |
-        echo "🔍 Validating environments..."
-        echo "   Source: ${{ inputs.source-environment }}"
-        echo "   Target: ${{ steps.get-target.outputs.target_env }}"
-        
-        VALIDATION_OUTPUT=$(cd $GITHUB_ACTION_PATH && node src/validate-migration.js "${{ inputs.source-environment }}" "${{ steps.get-target.outputs.target_env }}" 2>&1)
-        VALIDATION_EXIT_CODE=$?
-        
-        echo "results<<EOF" >> $GITHUB_OUTPUT
-        echo "$VALIDATION_OUTPUT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-        
-        if [ $VALIDATION_EXIT_CODE -ne 0 ] && [ "${{ inputs.fail-on-error }}" == "true" ]; then
-          echo "❌ Environment validation failed"
-          exit 1
-        fi
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+    with:
+      fetch-depth: 0  # Fetch all history for proper tagging
+  
+  - name: Setup pnpm
+    uses: pnpm/action-setup@v4
+    with:
+      version: 8.14.0
+  
+  - name: Setup Node.js
+    uses: actions/setup-node@v4
+    with:
+      node-version: ${{ inputs.node-version }}
+      cache: 'pnpm'
+  
+  - name: Install dependencies
+    shell: bash
+    run: |
+      echo "📦 Installing dependencies..."
+      pnpm install --frozen-lockfile --prefer-offline
+      echo "🔧 Installing contentful-cli globally..."
+      pnpm add -g contentful-cli
+    env:
+      HUSKY: 0  # Disable Husky hooks during CI
 
-    - name: Generate migration preview
-      shell: bash
-      id: preview
-      if: success()
-      env:
-        CONTENTFUL_SPACE_ID: ${{ inputs.space-id }}
-        CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.management-token }}
-      run: |
-        echo "🔍 Generating preview for environments:"
-        echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
-        
-        # Run preview and capture output
-        PREVIEW_OUTPUT=$(pnpm run sync:preview -- "${{ inputs.source-environment }}" 2>&1)
-        PREVIEW_EXIT_CODE=$?
-        
-        # Check if changes were detected
-        if echo "$PREVIEW_OUTPUT" | grep -q "No changes detected"; then
-          echo "changes-detected=false" >> $GITHUB_OUTPUT
-          echo "summary=No changes detected between environments" >> $GITHUB_OUTPUT
-          
-          if [[ "${{ inputs.skip-if-no-changes }}" == "true" ]]; then
-            echo "⏭️ Skipping migration as no changes were detected"
-            exit 0
-          fi
-        else
-          echo "changes-detected=true" >> $GITHUB_OUTPUT
-          echo "summary<<EOF" >> $GITHUB_OUTPUT
-          echo "$PREVIEW_OUTPUT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-        fi
-        
-        if [ $PREVIEW_EXIT_CODE -ne 0 ] && [ "${{ inputs.fail-on-error }}" == "true" ]; then
-          echo "❌ Preview generation failed"
-          exit 1
-        fi
-
-    - name: Comment PR
-      if: |
-        github.event_name == 'pull_request' && 
-        inputs.github-token != '' && 
-        inputs.comment-on-pr == 'true'
-      uses: actions/github-script@v7
-      with:
-        github-token: ${{ inputs.github-token }}
-        script: |
-          const fs = require('fs');
-          
-          try {
-            const migrationFiles = fs.readdirSync('./migrations')
-              .filter(file => file.endsWith('.js'))
-              .sort((a, b) => b.localeCompare(a));
-            
-            if (migrationFiles.length > 0) {
-              const latestMigration = migrationFiles[0];
-              const migrationContent = fs.readFileSync(`./migrations/${latestMigration}`, 'utf8');
-              
-              const validationResults = `${{ steps.validate.outputs.results }}`;
-              
-              const comment = `## Contentful Migration Preview 🔍
-              
-              ### Environment Promotion
-              \`${{ inputs.source-environment }}\` → \`${{ steps.get-target.outputs.target_env }}\`
-              
-              ### Latest Migration File
-              \`${latestMigration}\`
-              
-              \`\`\`javascript
-              ${migrationContent}
-              \`\`\`
-              
-              ### Validation Results
-              \`\`\`
-              ${validationResults}
-              \`\`\`
-              
-              ### Changes Detected
-              ${${{ steps.preview.outputs.changes-detected }} ? '✅ Yes' : '❌ No'}
-              
-              <details>
-              <summary>Full Preview Output</summary>
-              
-              \`\`\`
-              ${{ steps.preview.outputs.summary }}
-              \`\`\`
-              </details>
-              
-              > **Note**: ${${{ inputs.dry-run }} ? 'This is a dry run. No changes will be applied.' : 'Changes will be applied when merged.'}
-              `;
-              
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
-          } catch (error) {
-            console.error('Error creating PR comment:', error);
-            // Don't fail the workflow for comment errors
-          }
-
-    - name: Apply migration
-      shell: bash
-      id: migration
-      if: inputs.dry-run != 'true' && success()
-      env:
-        CONTENTFUL_SPACE_ID: ${{ inputs.space-id }}
-        CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.management-token }}
-      run: |
-        echo "🔄 Applying migration:"
-        echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
-        
-        MIGRATION_OUTPUT=$(pnpm run sync -- "${{ inputs.source-environment }}" 2>&1)
-        MIGRATION_EXIT_CODE=$?
-        
-        if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
-          echo "status=success" >> $GITHUB_OUTPUT
-          echo "error=" >> $GITHUB_OUTPUT
-        else
-          echo "status=failure" >> $GITHUB_OUTPUT
-          echo "error<<EOF" >> $GITHUB_OUTPUT
-          echo "$MIGRATION_OUTPUT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
+  - name: Get target environment
+    shell: bash
+    id: get-target
+    run: |
+      echo "🎯 Determining target environment..."
+      # Define the promotion path
+      case "${{ inputs.environment }}" in
+        "master")
+          echo "target_env=staging" >> $GITHUB_OUTPUT
+          echo "✅ Target environment: staging"
+          ;;
+        "staging")
+          echo "target_env=main" >> $GITHUB_OUTPUT
+          echo "✅ Target environment: main"
+          ;;
+        "main")
+          echo "❌ Error: Cannot promote from main environment"
           if [[ "${{ inputs.fail-on-error }}" == "true" ]]; then
             exit 1
           fi
+          ;;
+        *)
+          echo "❌ Error: Invalid target environment: ${{ inputs.environment }}"
+          echo "Valid environments are: master, staging"
+          if [[ "${{ inputs.fail-on-error }}" == "true" ]]; then
+            exit 1
+          fi
+          ;;
+      esac
+
+  - name: Validate environments
+    shell: bash
+    id: validate
+    env:
+      CONTENTFUL_SPACE_ID: ${{ inputs.contentful-space-id }}
+      CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.contentful-management-token }}
+    run: |
+      echo "🔍 Validating environments..."
+      echo "   Target: ${{ inputs.environment }}"
+      
+      VALIDATION_OUTPUT=$(cd $GITHUB_ACTION_PATH && node src/validate-migration.js "${{ inputs.environment }}" "${{ steps.get-target.outputs.target_env }}" 2>&1)
+      VALIDATION_EXIT_CODE=$?
+      
+      echo "results<<EOF" >> $GITHUB_OUTPUT
+      echo "$VALIDATION_OUTPUT" >> $GITHUB_OUTPUT
+      echo "EOF" >> $GITHUB_OUTPUT
+      
+      if [ $VALIDATION_EXIT_CODE -ne 0 ] && [ "${{ inputs.fail-on-error }}" == "true" ]; then
+        echo "❌ Environment validation failed"
+        exit 1
+      fi
+
+  - name: Generate migration preview
+    shell: bash
+    id: preview
+    if: success()
+    env:
+      CONTENTFUL_SPACE_ID: ${{ inputs.contentful-space-id }}
+      CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.contentful-management-token }}
+    run: |
+      echo "🔍 Generating preview for environments:"
+      echo "   ${{ inputs.environment }} → ${{ steps.get-target.outputs.target_env }}"
+      
+      # Run preview and capture output
+      PREVIEW_OUTPUT=$(pnpm run sync:preview -- "${{ inputs.environment }}" 2>&1)
+      PREVIEW_EXIT_CODE=$?
+      
+      # Check if changes were detected
+      if echo "$PREVIEW_OUTPUT" | grep -q "No changes detected"; then
+        echo "changes-detected=false" >> $GITHUB_OUTPUT
+        echo "summary=No changes detected between environments" >> $GITHUB_OUTPUT
+        
+        if [[ "${{ inputs.skip-if-no-changes }}" == "true" ]]; then
+          echo "⏭️ Skipping migration as no changes were detected"
+          exit 0
         fi
+      else
+        echo "changes-detected=true" >> $GITHUB_OUTPUT
+        echo "summary<<EOF" >> $GITHUB_OUTPUT
+        echo "$PREVIEW_OUTPUT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+      fi
+      
+      if [ $PREVIEW_EXIT_CODE -ne 0 ] && [ "${{ inputs.fail-on-error }}" == "true" ]; then
+        echo "❌ Preview generation failed"
+        exit 1
+      fi
 
-    - name: Create deployment tag
-      if: |
-        inputs.dry-run != 'true' && 
-        steps.migration.outputs.status == 'success' && 
-        steps.preview.outputs.changes-detected == 'true'
-      shell: bash
-      run: |
-        echo "🏷️ Creating deployment tag..."
-        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-        TAG_NAME="contentful_${{ inputs.source-environment }}_to_${{ steps.get-target.outputs.target_env }}_${TIMESTAMP}"
+  - name: Comment PR
+    if: |
+      github.event_name == 'pull_request' && 
+      inputs.github-token != '' && 
+      inputs.comment-on-pr == 'true'
+    uses: actions/github-script@v7
+    with:
+      github-token: ${{ inputs.github-token }}
+      script: |
+        const fs = require('fs');
         
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        
-        # Add migration details to tag message
-        TAG_MESSAGE="Contentful migration from ${{ inputs.source-environment }} to ${{ steps.get-target.outputs.target_env }}
+        try {
+          const migrationFiles = fs.readdirSync('./migrations')
+            .filter(file => file.endsWith('.js'))
+            .sort((a, b) => b.localeCompare(a));
+          
+          if (migrationFiles.length > 0) {
+            const latestMigration = migrationFiles[0];
+            const migrationContent = fs.readFileSync(`./migrations/${latestMigration}`, 'utf8');
+            
+            const validationResults = `${{ steps.validate.outputs.results }}`;
+            
+            const comment = `## Contentful Migration Preview 🔍
+            
+            ### Environment Promotion
+            \`${{ inputs.environment }}\` → \`${{ steps.get-target.outputs.target_env }}\`
+            
+            ### Latest Migration File
+            \`${latestMigration}\`
+            
+            \`\`\`javascript
+            ${migrationContent}
+            \`\`\`
+            
+            ### Validation Results
+            \`\`\`
+            ${validationResults}
+            \`\`\`
+            
+            ### Changes Detected
+            ${${{ steps.preview.outputs.changes-detected }} ? '✅ Yes' : '❌ No'}
+            
+            <details>
+            <summary>Full Preview Output</summary>
+            
+            \`\`\`
+            ${{ steps.preview.outputs.summary }}
+            \`\`\`
+            </details>
+            
+            > **Note**: ${${{ inputs.dry-run }} ? 'This is a dry run. No changes will be applied.' : 'Changes will be applied when merged.'}
+            `;
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          }
+        } catch (error) {
+          console.error('Error creating PR comment:', error);
+          // Don't fail the workflow for comment errors
+        }
 
-        Changes applied:
-        ${{ steps.preview.outputs.summary }}"
+  - name: Apply migration
+    shell: bash
+    id: migration
+    if: inputs.dry-run != 'true' && success()
+    env:
+      CONTENTFUL_SPACE_ID: ${{ inputs.contentful-space-id }}
+      CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.contentful-management-token }}
+    run: |
+      echo "🔄 Applying migration:"
+      echo "   ${{ inputs.environment }} → ${{ steps.get-target.outputs.target_env }}"
+      
+      MIGRATION_OUTPUT=$(pnpm run sync -- "${{ inputs.environment }}" 2>&1)
+      MIGRATION_EXIT_CODE=$?
+      
+      if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
+        echo "status=success" >> $GITHUB_OUTPUT
+        echo "error=" >> $GITHUB_OUTPUT
+      else
+        echo "status=failure" >> $GITHUB_OUTPUT
+        echo "error<<EOF" >> $GITHUB_OUTPUT
+        echo "$MIGRATION_OUTPUT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
         
-        git tag -a "$TAG_NAME" -m "$TAG_MESSAGE"
-        git push origin "$TAG_NAME"
-        echo "✅ Deployment tag created: $TAG_NAME" 
+        if [[ "${{ inputs.fail-on-error }}" == "true" ]]; then
+          exit 1
+        fi
+      fi
+
+  - name: Create deployment tag
+    if: |
+      inputs.dry-run != 'true' && 
+      steps.migration.outputs.status == 'success' && 
+      steps.preview.outputs.changes-detected == 'true'
+    shell: bash
+    run: |
+      echo "🏷️ Creating deployment tag..."
+      TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+      TAG_NAME="contentful_${{ inputs.environment }}_to_${{ steps.get-target.outputs.target_env }}_${TIMESTAMP}"
+      
+      git config --global user.name 'GitHub Actions'
+      git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      
+      # Add migration details to tag message
+      TAG_MESSAGE="Contentful migration from ${{ inputs.environment }} to ${{ steps.get-target.outputs.target_env }}
+
+      Changes applied:
+      ${{ steps.preview.outputs.summary }}"
+      
+      git tag -a "$TAG_NAME" -m "$TAG_MESSAGE"
+      git push origin "$TAG_NAME"
+      echo "✅ Deployment tag created: $TAG_NAME" 
