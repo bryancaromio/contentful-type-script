@@ -47,6 +47,11 @@ jobs:
       changes_detected: ${{ steps.migration.outputs.changes-detected }}
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper tagging
+      
       - name: Run Contentful Migration
         id: migration
         uses: ./.github/workflows/contentful-migration
