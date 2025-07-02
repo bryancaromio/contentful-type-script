@@ -264,18 +264,21 @@ runs:
               const latestMigration = migrationFiles[0];
               const migrationContent = fs.readFileSync(`./migrations/${latestMigration}`, 'utf8');
               
-              const comment = `## 🔄 Contentful Migration
+              const comment = `## 🚀 Contentful Migration Preview
 
-              **Environments:** \`${{ inputs.source-environment }}\` → \`${{ steps.get-target.outputs.target_env }}\`
-              
-              **Changes Detected:** ${${{ steps.preview.outputs.changes-detected }} ? '✅ Yes' : '❌ No'}
-              
-              **Migration Script:**
+              ### 🚀 Migration Details
+              | **From** | **To** | **Status** |
+              |----------|--------|------------|
+              | \`${{ inputs.source-environment }}\` | \`${{ steps.get-target.outputs.target_env }}\` | ${${{ steps.preview.outputs.changes-detected }} ? '✅ Changes Found' : '⚪ No Changes'} |
+
+              ### 📝 Generated Migration Script
               \`\`\`javascript
               ${migrationContent}
               \`\`\`
-              
-              > ${${{ inputs.dry-run }} ? '🔍 **Dry Run** - No changes will be applied' : '🔥 **Live Migration** - Changes will be applied when merged'}
+
+              ---
+
+              ${${{ inputs.dry-run }} ? '🔍 **This is a dry run preview** - No changes will be applied to Contentful' : '�� **Live migration** - Changes will be applied when this PR is merged'}
               `;
               
               await github.rest.issues.createComment({
