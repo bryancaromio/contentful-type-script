@@ -1,8 +1,31 @@
 #!/usr/bin/env node
-require('dotenv').config();
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import 'dotenv/config';
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+
+interface ContentTypeField {
+  id: string;
+  name: string;
+  type: string;
+  localized: boolean;
+  required: boolean;
+  validations?: any[];
+}
+
+interface ContentType {
+  sys: {
+    id: string;
+  };
+  name: string;
+  description?: string;
+  fields: ContentTypeField[];
+  displayField?: string;
+}
+
+interface ContentfulExport {
+  contentTypes?: ContentType[];
+}
 
 // Validate environment variables
 if (!process.env.CONTENTFUL_SPACE_ID || !process.env.CONTENTFUL_MANAGEMENT_TOKEN) {
@@ -57,8 +80,8 @@ try {
 --skip-webhooks`, { stdio: 'inherit' });
 
   // Read and parse JSON files
-  const sourceContent = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
-  const targetContent = JSON.parse(fs.readFileSync(targetFile, 'utf8'));
+  const sourceContent: ContentfulExport = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
+  const targetContent: ContentfulExport = JSON.parse(fs.readFileSync(targetFile, 'utf8'));
 
   // Generate migration script
   let migrationScript = `/**
@@ -159,7 +182,7 @@ module.exports = function(migration) {
 } catch (error) {
   console.error(`
 ❌ Error generating migration:
-   ${error.message}
+   ${error instanceof Error ? error.message : 'Unknown error occurred'}
 
 💡 Make sure to:
    1. Have contentful-cli installed globally (npm install -g contentful-cli)

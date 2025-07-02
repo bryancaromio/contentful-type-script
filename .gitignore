@@ -1,25 +1,44 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
-# Environment variables
+# TypeScript
+dist/
+*.tsbuildinfo
+
+# Environment
 .env
 .env.*
 !.env.example
 
-# Logs
-logs
-*.log
-npm-debug.log*
-
-# Runtime data
-temp/
-
 # IDE
-.idea/
 .vscode/
+.idea/
+*.sublime-*
 *.swp
 *.swo
 
-# OS
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# System
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Contentful
+temp/
+migrations/*.js
+!migrations/examples/*.js
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+.cache/
+.tmp/

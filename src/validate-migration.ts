@@ -1,18 +1,19 @@
 #!/usr/bin/env node
-require('dotenv').config();
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const { toContentfulEnv } = require('./utils/environment-mapper');
+import 'dotenv/config';
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { toContentfulEnv, ContentfulEnv } from './utils/environment-mapper';
 
 // Define strict promotion paths using Contentful environment names
-const ALLOWED_PROMOTIONS = {
+const ALLOWED_PROMOTIONS: Record<ContentfulEnv, ContentfulEnv[]> = {
   'development': ['qa'],
   'qa': ['stage'],
-  'stage': ['master']
+  'stage': ['master'],
+  'master': []
 };
 
-function validateEnvironments(sourceEnv, targetEnv) {
+function validateEnvironments(sourceEnv: string, targetEnv: string): void {
   // Convert GitHub environment names to Contentful environment names
   const contentfulSourceEnv = toContentfulEnv(sourceEnv);
   const contentfulTargetEnv = toContentfulEnv(targetEnv);
@@ -31,8 +32,8 @@ function validateEnvironments(sourceEnv, targetEnv) {
   }
 }
 
-function validateEnvironmentVariables() {
-  const requiredVars = ['CONTENTFUL_SPACE_ID', 'CONTENTFUL_MANAGEMENT_TOKEN'];
+function validateEnvironmentVariables(): void {
+  const requiredVars = ['CONTENTFUL_SPACE_ID', 'CONTENTFUL_MANAGEMENT_TOKEN'] as const;
   const missingVars = requiredVars.filter(varName => !process.env[varName]);
 
   if (missingVars.length > 0) {
@@ -48,7 +49,7 @@ function validateEnvironmentVariables() {
   }
 }
 
-function validateContentfulAccess(sourceEnv, targetEnv) {
+function validateContentfulAccess(sourceEnv: string, targetEnv: string): void {
   try {
     // Convert GitHub environment names to Contentful environment names
     const contentfulSourceEnv = toContentfulEnv(sourceEnv);
@@ -64,7 +65,7 @@ function validateContentfulAccess(sourceEnv, targetEnv) {
     });
   } catch (error) {
     console.error(`
-❌ Error: ${error.message}
+❌ Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}
    Make sure that:
    1. The token has correct permissions for both environments
    2. The environments exist in Contentful
@@ -74,7 +75,7 @@ function validateContentfulAccess(sourceEnv, targetEnv) {
   }
 }
 
-function validateMigrationFiles() {
+function validateMigrationFiles(): void {
   const migrationsDir = path.join(__dirname, '..', 'migrations');
   
   if (!fs.existsSync(migrationsDir)) {
@@ -114,7 +115,7 @@ function validateMigrationFiles() {
     } catch (error) {
       console.error(`
 ❌ Error in migration file: ${file}
-   ${error.message}
+   ${error instanceof Error ? error.message : 'Unknown error occurred'}
 `);
       process.exit(1);
     }
@@ -175,7 +176,7 @@ try {
 } catch (error) {
   console.error(`
 ❌ Error during validation:
-   ${error.message}
+   ${error instanceof Error ? error.message : 'Unknown error occurred'}
 `);
   process.exit(1);
 } 

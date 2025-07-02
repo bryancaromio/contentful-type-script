@@ -2,21 +2,29 @@
   "name": "contentful-migrations-project",
   "version": "1.0.0",
   "description": "Contentful content model migrations",
-  "main": "src/migrate.js",
+  "main": "dist/migrate.js",
+  "types": "dist/migrate.d.ts",
   "scripts": {
-    "sync": "node src/sync-environments.js sync",
-    "sync:check": "node src/sync-environments.js check",
-    "sync:preview": "DRY_RUN=true node src/sync-environments.js sync",
-    "sync:dev": "node src/sync-environments.js sync develop",
-    "sync:qa": "node src/sync-environments.js sync qa",
-    "sync:staging": "node src/sync-environments.js sync staging",
-    "check:dev": "node src/sync-environments.js check develop",
-    "check:qa": "node src/sync-environments.js check qa",
-    "check:staging": "node src/sync-environments.js check staging"
+    "build": "tsc",
+    "sync": "node dist/sync-environments.js sync",
+    "sync:check": "node dist/sync-environments.js check",
+    "sync:preview": "DRY_RUN=true node dist/sync-environments.js sync",
+    "sync:dev": "node dist/sync-environments.js sync develop",
+    "sync:qa": "node dist/sync-environments.js sync qa",
+    "sync:staging": "node dist/sync-environments.js sync staging",
+    "check:dev": "node dist/sync-environments.js check develop",
+    "check:qa": "node dist/sync-environments.js check qa",
+    "check:staging": "node dist/sync-environments.js check staging",
+    "type-check": "tsc --noEmit",
+    "dev": "tsc --watch"
   },
   "dependencies": {
     "contentful-migration": "^4.17.2",
     "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
   },
   "engines": {
     "node": ">=16.0.0"

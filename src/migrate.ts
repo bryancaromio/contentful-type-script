@@ -1,10 +1,18 @@
-require('dotenv').config();
-const { runMigration } = require('contentful-migration');
-const path = require('path');
+import 'dotenv/config';
+import { runMigration } from 'contentful-migration';
+import path from 'path';
 
-const options = {
-  spaceId: process.env.CONTENTFUL_SPACE_ID,
-  accessToken: process.env.CONTENTFUL_MANAGEMENT_TOKEN,
+interface MigrationOptions {
+  spaceId: string;
+  accessToken: string;
+  environmentId: string;
+  yes: boolean;
+  filePath?: string;
+}
+
+const options: Omit<MigrationOptions, 'environmentId'> = {
+  spaceId: process.env.CONTENTFUL_SPACE_ID!,
+  accessToken: process.env.CONTENTFUL_MANAGEMENT_TOKEN!,
   yes: true
 };
 
@@ -35,7 +43,11 @@ if (environment !== 'development' && !process.env.FORCE_MIGRATION) {
 const filePath = path.join(process.cwd(), 'migrations', migrationFile);
 
 // Add the environment to the options
-options.environmentId = environment;
+const migrationOptions: MigrationOptions = {
+  ...options,
+  environmentId: environment,
+  filePath
+};
 
 console.log(`
 🚀 Starting migration:
@@ -44,7 +56,7 @@ console.log(`
    - Space ID: ${options.spaceId}
 `);
 
-runMigration({ ...options, filePath })
+runMigration(migrationOptions)
   .then(() => {
     console.log(`
 ✅ Migration completed successfully
@@ -52,10 +64,10 @@ runMigration({ ...options, filePath })
    Environment: ${environment}
     `);
   })
-  .catch((e) => {
+  .catch((error: Error) => {
     console.error(`
 ❌ Migration error:
-   ${e.message}
+   ${error.message}
     `);
     process.exit(1);
   }); 

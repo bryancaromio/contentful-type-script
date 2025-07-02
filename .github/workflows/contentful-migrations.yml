@@ -1,7 +1,13 @@
 name: Contentful Migrations
 
 on:
-  # Permite ejecutar manualmente el workflow
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - 'migrations/**'
+      - '.github/workflows/contentful-migrations.yml'
+      - '.github/workflows/contentful-migration/action.yml'
+  
   workflow_dispatch:
     inputs:
       dry_run:
@@ -9,20 +15,63 @@ on:
         type: boolean
         default: true
         required: false
+      source_environment:
+        description: 'Source environment to promote from'
+        type: choice
+        options:
+          - develop
+          - qa
+          - staging
+        required: true
+        default: 'develop'
+      skip_validation:
+        description: 'Skip environment validation (use with caution)'
+        type: boolean
+        default: false
+        required: false
 
 # Permisos necesarios para comentar en PRs y crear tags
 permissions:
   contents: write
   pull-requests: write
+  issues: write
+
+# Previene ejecuciones paralelas del mismo workflow
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20.19.0'
 
 jobs:
   # Job para validar y previsualizar cambios en PRs
   validate-pr:
-    if: github.event_name == 'pull_request'
+    if: |
+      github.event_name == 'pull_request' && 
+      github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Validate migration files
+        run: |
+          echo "🔍 Validando archivos de migración..."
+          
+          # Verificar que solo hay archivos .js en migrations/
+          if find migrations -type f ! -name "*.js" 2>/dev/null | grep -q .; then
+            echo "❌ Error: Solo se permiten archivos .js en el directorio migrations/"
+            exit 1
+          fi
+          
+          # Verificar nomenclatura de archivos
+          find migrations -type f -name "*.js" | while read file; do
+            if ! [[ $(basename "$file") =~ ^[0-9]{14}_[a-z0-9_-]+\.js$ ]]; then
+              echo "❌ Error: El archivo $file no sigue el formato requerido (YYYYMMDDHHMMSS_nombre.js)"
+              exit 1
+            fi
+          done
       
       - name: Run Contentful Migration
         uses: ./.github/workflows/contentful-migration/action.yml
@@ -30,38 +79,97 @@ jobs:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
           source-environment: ${{ github.head_ref }}
+          node-version: ${{ env.NODE_VERSION }}
           dry-run: true # Siempre en modo preview para PRs
+          fail-on-error: true
+          skip-if-no-changes: false
+          comment-on-pr: true
 
   # Job para promociones manuales entre environments
   promote-environment:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name }} # Usa el branch desde el contexto del workflow
+    environment: 
+      name: ${{ github.event.inputs.source_environment }}
+      url: ${{ steps.migration.outputs.environment_url }}
+    outputs:
+      migration_status: ${{ steps.migration.outputs.status }}
+      changes_detected: ${{ steps.migration.outputs.changes-detected }}
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         
       - name: Run Contentful Migration
+        id: migration
         uses: ./.github/workflows/contentful-migration/action.yml
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: ${{ github.ref_name }}
+          source-environment: ${{ github.event.inputs.source_environment }}
+          node-version: ${{ env.NODE_VERSION }}
           dry-run: ${{ github.event.inputs.dry_run }}
+          fail-on-error: true
+          skip-if-no-changes: true
+          comment-on-pr: false
+      
+      - name: Create Issue on Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `❌ Error en migración de Contentful: ${process.env.SOURCE_ENV} → ${process.env.TARGET_ENV}`,
+              body: `
+              # Error en Migración de Contentful
+              
+              ## Detalles
+              - **Source Environment:** ${process.env.SOURCE_ENV}
+              - **Target Environment:** ${process.env.TARGET_ENV}
+              - **Run:** [Ver detalles](${process.env.RUN_URL})
+              
+              ## Error
+              \`\`\`
+              ${process.env.ERROR_MESSAGE}
+              \`\`\`
+              
+              Por favor, revisa los logs del workflow para más detalles.
+              `
+            });
+            
+            console.log(`Issue creado: ${issue.data.html_url}`);
+        env:
+          SOURCE_ENV: ${{ github.event.inputs.source_environment }}
+          TARGET_ENV: ${{ steps.migration.outputs.target_env }}
+          ERROR_MESSAGE: ${{ steps.migration.outputs.error }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   # Job para promociones automáticas después de merge a develop
   auto-promote-develop:
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.base_ref == 'develop'
+    if: |
+      github.event_name == 'pull_request' && 
+      github.event.pull_request.merged == true && 
+      github.base_ref == 'develop'
     runs-on: ubuntu-latest
-    environment: develop # Requiere aprobación para promoción automática
+    environment: 
+      name: develop
+      url: ${{ steps.migration.outputs.environment_url }}
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         
       - name: Run Contentful Migration
+        id: migration
         uses: ./.github/workflows/contentful-migration/action.yml
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
           source-environment: develop
-          dry-run: false # Aplica los cambios automáticamente 
+          node-version: ${{ env.NODE_VERSION }}
+          dry-run: false
+          fail-on-error: true
+          skip-if-no-changes: true
+          comment-on-pr: true
