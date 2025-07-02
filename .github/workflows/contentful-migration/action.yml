@@ -311,28 +311,4 @@ runs:
           if [[ "${{ inputs.fail-on-error }}" == "true" ]]; then
             exit 1
           fi
-        fi
-
-    - name: Create deployment tag
-      if: |
-        inputs.dry-run != 'true' && 
-        steps.migration.outputs.status == 'success' && 
-        steps.preview.outputs.changes-detected == 'true'
-      shell: bash
-      run: |
-        echo "🏷️ Creating deployment tag..."
-        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-        TAG_NAME="contentful_${{ inputs.source-environment }}_to_${{ steps.get-target.outputs.target_env }}_${TIMESTAMP}"
-        
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        
-        # Add migration details to tag message
-        TAG_MESSAGE="Contentful migration from ${{ inputs.source-environment }} to ${{ steps.get-target.outputs.target_env }}
-
-        Changes applied:
-        ${{ steps.preview.outputs.summary }}"
-        
-        git tag -a "$TAG_NAME" -m "$TAG_MESSAGE"
-        git push origin "$TAG_NAME"
-        echo "✅ Deployment tag created: $TAG_NAME" 
+        fi 
