@@ -250,6 +250,11 @@ runs:
       with:
         github-token: ${{ inputs.github-token }}
         script: |
+          // Extract only the script content between the markers
+          const fullOutput = process.env.SCRIPT_CONTENT || '';
+          const scriptMatch = fullOutput.match(/=== Script Content ===\n([\s\S]*?)\n=== End of Script ===/);
+          const scriptContent = scriptMatch ? scriptMatch[1].trim() : 'No changes detected between environments.';
+
           const preview = `### Contentful Migration Preview 🔍
 
           #### Environment Promotion
@@ -260,7 +265,7 @@ runs:
 
           #### Migration Script
           \`\`\`javascript
-          ${process.env.SCRIPT_CONTENT || 'No changes detected between environments.'}
+          ${scriptContent}
           \`\`\`
           `;
 
