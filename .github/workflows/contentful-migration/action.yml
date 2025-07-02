@@ -244,82 +244,37 @@ runs:
           exit 1
         fi
 
-    - name: Comment PR
-      if: |
-        github.event_name == 'pull_request' && 
-        inputs.github-token != '' && 
-        inputs.comment-on-pr == 'true'
+    - name: Comment on PR
+      if: ${{ inputs.comment-on-pr == 'true' && github.event_name == 'pull_request' }}
       uses: actions/github-script@v7
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const previewOutput = `${{ steps.preview.outputs.summary }}`;
-          const sourceEnv = '${{ inputs.source-environment }}';
-          const targetEnv = '${{ steps.get-target.outputs.target_env }}';
-          const changesDetected = '${{ steps.preview.outputs.changes-detected }}' === 'true';
-          
-          let commentBody = `# Contentful Migration Preview 🔍\n\n`;
-          commentBody += `## Environment Promotion\n`;
-          commentBody += `\`${sourceEnv}\` → \`${targetEnv}\`\n\n`;
-          commentBody += `## Migration Script\n`;
-          commentBody += `\`\`\`javascript\n`;
-          
-          if (changesDetected) {
-            // Extract script content between markers if present
-            const scriptMatch = previewOutput.match(/=== Script Content ===[\s\S]*?=== End of Script ===/);
-            if (scriptMatch) {
-              commentBody += scriptMatch[0];
-            } else {
-              commentBody += previewOutput;
-            }
-          } else {
-            commentBody += 'No changes detected between environments.';
-          }
-          
-          commentBody += '\n\`\`\`';
-          
-          // Add validation results if available
-          const validationResults = '${{ steps.validate.outputs.results }}';
-          if (validationResults && validationResults !== 'Environment validation was skipped by user request') {
-            commentBody += '\n\n## Validation Results\n';
-            commentBody += '```\n' + validationResults + '\n```';
-          }
-          
-          // Add dry run notice if applicable
-          if ('${{ inputs.dry-run }}' === 'true') {
-            commentBody += '\n\n> ⚠️ This is a dry run. No changes will be applied.';
-          }
-          
-          // Post comment to PR
-          const { data: comments } = await github.rest.issues.listComments({
+          const preview = `### Contentful Migration Preview 🔍
+
+          #### Environment Promotion
+          \`${process.env.SOURCE_ENV}\` → \`${process.env.TARGET_ENV}\`
+
+          #### Changes Detected
+          ${process.env.CHANGES_DETECTED === 'true' ? '✅ Yes' : '❌ No'}
+
+          #### Migration Script
+          \`\`\`javascript
+          ${process.env.SCRIPT_CONTENT || 'No changes detected between environments.'}
+          \`\`\`
+          `;
+
+          await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number
+            issue_number: context.issue.number,
+            body: preview
           });
-          
-          // Look for existing bot comment
-          const botComment = comments.find(comment => 
-            comment.user.type === 'Bot' && 
-            comment.body.includes('Contentful Migration Preview 🔍')
-          );
-          
-          if (botComment) {
-            // Update existing comment
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: botComment.id,
-              body: commentBody
-            });
-          } else {
-            // Create new comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: commentBody
-            });
-          }
+      env:
+        SOURCE_ENV: ${{ inputs.source-environment }}
+        TARGET_ENV: ${{ steps.get-target.outputs.target_env }}
+        CHANGES_DETECTED: ${{ steps.preview.outputs.changes-detected }}
+        SCRIPT_CONTENT: ${{ steps.preview.outputs.summary }}
 
     - name: Apply migration
       shell: bash
