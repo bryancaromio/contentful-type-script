@@ -40,44 +40,30 @@ jobs:
   validate-pr:
     if: |
       github.event_name == 'pull_request' && 
-      github.event.action != 'closed'
+      github.event.pull_request.merged == false
     runs-on: ubuntu-latest
+    outputs:
+      migration_status: ${{ steps.migration.outputs.status }}
+      changes_detected: ${{ steps.migration.outputs.changes-detected }}
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for proper tagging
-      
-      - name: Validate migration files
-        if: ${{ !github.event.inputs.skip_validation }}
-        run: |
-          echo "🔍 Validando archivos de migración..."
-          
-          # Verificar que solo hay archivos .js en migrations/
-          if find migrations -type f ! -name "*.js" 2>/dev/null | grep -q .; then
-            echo "❌ Error: Solo se permiten archivos .js en el directorio migrations/"
-            exit 1
-          fi
-          
-          # Verificar nomenclatura de archivos
-          find migrations -type f -name "*.js" | while read file; do
-            if ! [[ $(basename "$file") =~ ^[0-9]{14}_[a-z0-9_-]+\.js$ ]]; then
-              echo "❌ Error: El archivo $file no sigue el formato requerido (YYYYMMDDHHMMSS_nombre.js)"
-              exit 1
-            fi
-          done
+          fetch-depth: 0  
       
       - name: Run Contentful Migration
+        id: migration
         uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
           source-environment: ${{ github.head_ref }}
           node-version: ${{ env.NODE_VERSION }}
-          dry-run: true # Siempre en modo preview para PRs
+          dry-run: ${{ github.event.inputs.dry_run }}
           fail-on-error: true
-          skip-if-no-changes: false
-          comment-on-pr: true
+          skip-if-no-changes: true
+          comment-on-pr: false
           skip-validation: ${{ github.event.inputs.skip_validation }}
 
   # Job para promociones manuales entre environments
