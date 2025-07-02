@@ -244,70 +244,46 @@ runs:
           exit 1
         fi
 
-    - name: Comment PR
-      if: |
-        github.event_name == 'pull_request' && 
-        inputs.github-token != '' && 
-        inputs.comment-on-pr == 'true'
+    - name: Comment on PR
+      if: ${{ inputs.comment-on-pr == 'true' && github.event_name == 'pull_request' }}
       uses: actions/github-script@v7
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const fs = require('fs');
-          
-          try {
-            const migrationFiles = fs.readdirSync('./migrations')
-              .filter(file => file.endsWith('.js'))
-              .sort((a, b) => b.localeCompare(a));
-            
-            if (migrationFiles.length > 0) {
-              const latestMigration = migrationFiles[0];
-              const migrationContent = fs.readFileSync(`./migrations/${latestMigration}`, 'utf8');
-              
-              const validationResults = `${{ steps.validate.outputs.results }}`;
-              
-              const comment = `## Contentful Migration Preview 🔍
-              
-              ### Environment Promotion
-              \`${{ inputs.source-environment }}\` → \`${{ steps.get-target.outputs.target_env }}\`
-              
-              ### Latest Migration File
-              \`${latestMigration}\`
-              
-              \`\`\`javascript
-              ${migrationContent}
-              \`\`\`
-              
-              ### Validation Results
-              \`\`\`
-              ${validationResults}
-              \`\`\`
-              
-              ### Changes Detected
-              ${${{ steps.preview.outputs.changes-detected }} ? '✅ Yes' : '❌ No'}
-              
-              <details>
-              <summary>Full Preview Output</summary>
-              
-              \`\`\`
-              ${{ steps.preview.outputs.summary }}
-              \`\`\`
-              </details>
-              
-              > **Note**: ${${{ inputs.dry-run }} ? 'This is a dry run. No changes will be applied.' : 'Changes will be applied when merged.'}
-              `;
-              
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
-          } catch (error) {
-            console.error('Error creating PR comment:', error);
-            // Don't fail the workflow for comment errors
-          }
+          // Extract only the script content between the markers
+          const fullOutput = process.env.SCRIPT_CONTENT || '';
+          const scriptMatch = fullOutput.match(/=== Script Content ===\n([\s\S]*?)\n=== End of Script ===/);
+          const scriptContent = scriptMatch ? scriptMatch[1].trim() : 'No changes detected between environments.';
+
+          // Check if the migration script is empty (only contains the function definition without content)
+          const isEmptyMigration = scriptContent.includes('module.exports = function(migration)') && 
+            !scriptContent.match(/migration\.[a-zA-Z]/); // No migration methods called
+
+          const preview = `### Contentful Migration Preview 🔍
+
+          #### Environment Promotion
+          \`${process.env.SOURCE_ENV}\` → \`${process.env.TARGET_ENV}\`
+
+          #### Changes Detected
+          ${!isEmptyMigration ? '✅ Yes' : '❌ No'}
+
+          #### Migration Script
+          \`\`\`javascript
+          ${scriptContent}
+          \`\`\`
+          `;
+
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: preview
+          });
+      env:
+        SOURCE_ENV: ${{ inputs.source-environment }}
+        TARGET_ENV: ${{ steps.get-target.outputs.target_env }}
+        CHANGES_DETECTED: ${{ steps.preview.outputs.changes-detected }}
+        SCRIPT_CONTENT: ${{ steps.preview.outputs.summary }}
 
     - name: Apply migration
       shell: bash
@@ -335,28 +311,4 @@ runs:
           if [[ "${{ inputs.fail-on-error }}" == "true" ]]; then
             exit 1
           fi
-        fi
-
-    - name: Create deployment tag
-      if: |
-        inputs.dry-run != 'true' && 
-        steps.migration.outputs.status == 'success' && 
-        steps.preview.outputs.changes-detected == 'true'
-      shell: bash
-      run: |
-        echo "🏷️ Creating deployment tag..."
-        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-        TAG_NAME="contentful_${{ inputs.source-environment }}_to_${{ steps.get-target.outputs.target_env }}_${TIMESTAMP}"
-        
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        
-        # Add migration details to tag message
-        TAG_MESSAGE="Contentful migration from ${{ inputs.source-environment }} to ${{ steps.get-target.outputs.target_env }}
-
-        Changes applied:
-        ${{ steps.preview.outputs.summary }}"
-        
-        git tag -a "$TAG_NAME" -m "$TAG_MESSAGE"
-        git push origin "$TAG_NAME"
-        echo "✅ Deployment tag created: $TAG_NAME" 
+        fi 
