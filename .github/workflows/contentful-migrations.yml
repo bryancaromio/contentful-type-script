@@ -54,6 +54,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper tagging
       
       - name: Validate migration files
         run: |
@@ -74,7 +76,7 @@ jobs:
           done
       
       - name: Run Contentful Migration
-        uses: ./.github/workflows/contentful-migration/action.yml
+        uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
@@ -99,10 +101,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper tagging
         
       - name: Run Contentful Migration
         id: migration
-        uses: ./.github/workflows/contentful-migration/action.yml
+        uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
@@ -160,10 +164,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper tagging
         
       - name: Run Contentful Migration
         id: migration
-        uses: ./.github/workflows/contentful-migration/action.yml
+        uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
