@@ -195,7 +195,9 @@ module.exports = function(migration) {
   fs.writeFileSync(migrationFileName, migrationScript);
 
   // Clean up temporary files
-  fs.rmSync('temp', { recursive: true, force: true });
+  if (process.env.KEEP_TEMP !== 'true') {
+    fs.rmSync('temp', { recursive: true, force: true });
+  }
 
   console.log(`
 ✅ Migration generated successfully:
@@ -220,7 +222,7 @@ module.exports = function(migration) {
 `);
 
   // Clean up temporary files in case of error
-  if (fs.existsSync('temp')) {
+  if (process.env.KEEP_TEMP !== 'true' && fs.existsSync('temp')) {
     fs.rmSync('temp', { recursive: true, force: true });
   }
   process.exit(1);
