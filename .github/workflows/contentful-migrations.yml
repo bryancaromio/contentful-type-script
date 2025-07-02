@@ -43,6 +43,13 @@ jobs:
       github.event.action != 'closed' &&
       (github.base_ref == 'develop' || (github.base_ref == 'qa' && github.head_ref == 'develop'))
     runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.base_ref }}
+      url: ${{ steps.migration.outputs.environment_url }}
+    outputs:
+      migration_status: ${{ steps.migration.outputs.status }}
+      changes_detected: ${{ steps.migration.outputs.changes-detected }}
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -69,17 +76,18 @@ jobs:
           done
       
       - name: Run Contentful Migration
+        id: migration
         uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: ${{ github.head_ref }}  # Usamos head_ref para obtener el environment de origen
+          source-environment: ${{ github.base_ref }}
           node-version: ${{ env.NODE_VERSION }}
-          dry-run: true # Siempre en modo preview para PRs
+          dry-run: true
           fail-on-error: true
-          skip-if-no-changes: false
+          skip-if-no-changes: true
           comment-on-pr: true
-          skip-validation: ${{ github.event.inputs.skip_validation }}
+          skip-validation: false
 
   # Job para promociones manuales entre environments
   promote-environment:
