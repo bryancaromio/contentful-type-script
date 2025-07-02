@@ -81,6 +81,12 @@ runs:
       env:
         HUSKY: 0  # Disable Husky hooks during CI
 
+    - name: Build TypeScript
+      shell: bash
+      run: |
+        echo "🔨 Building TypeScript files..."
+        pnpm run build
+
     - name: Get target environment
       shell: bash
       id: get-target
@@ -126,7 +132,7 @@ runs:
         echo "   Source: ${{ inputs.source-environment }}"
         echo "   Target: ${{ steps.get-target.outputs.target_env }}"
         
-        VALIDATION_OUTPUT=$(cd $GITHUB_ACTION_PATH && node src/validate-migration.js "${{ inputs.source-environment }}" "${{ steps.get-target.outputs.target_env }}" 2>&1)
+        VALIDATION_OUTPUT=$(node dist/validate-migration.js "${{ inputs.source-environment }}" "${{ steps.get-target.outputs.target_env }}" 2>&1)
         VALIDATION_EXIT_CODE=$?
         
         echo "results<<EOF" >> $GITHUB_OUTPUT
