@@ -40,45 +40,31 @@ jobs:
   validate-pr:
     if: |
       github.event_name == 'pull_request' && 
-      github.event.action != 'closed'
+      github.event.pull_request.merged == false
     runs-on: ubuntu-latest
+    outputs:
+      migration_status: ${{ steps.migration.outputs.status }}
+      changes_detected: ${{ steps.migration.outputs.changes-detected }}
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for proper tagging
-      
-      - name: Validate migration files
-        if: ${{ !github.event.inputs.skip_validation }}
-        run: |
-          echo "🔍 Validando archivos de migración..."
-          
-          # Verificar que solo hay archivos .js en migrations/
-          if find migrations -type f ! -name "*.js" 2>/dev/null | grep -q .; then
-            echo "❌ Error: Solo se permiten archivos .js en el directorio migrations/"
-            exit 1
-          fi
-          
-          # Verificar nomenclatura de archivos
-          find migrations -type f -name "*.js" | while read file; do
-            if ! [[ $(basename "$file") =~ ^[0-9]{14}_[a-z0-9_-]+\.js$ ]]; then
-              echo "❌ Error: El archivo $file no sigue el formato requerido (YYYYMMDDHHMMSS_nombre.js)"
-              exit 1
-            fi
-          done
+          fetch-depth: 0  
       
       - name: Run Contentful Migration
+        id: migration
         uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
           source-environment: ${{ github.head_ref }}
           node-version: ${{ env.NODE_VERSION }}
-          dry-run: true # Siempre en modo preview para PRs
+          dry-run: true
           fail-on-error: true
           skip-if-no-changes: false
           comment-on-pr: true
-          skip-validation: ${{ github.event.inputs.skip_validation }}
+          skip-validation: true
 
   # Job para promociones manuales entre environments
   promote-environment:
@@ -119,57 +105,71 @@ jobs:
             const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `❌ Error en migración de Contentful: ${process.env.SOURCE_ENV} → ${process.env.TARGET_ENV}`,
+              title: `❌ Contentful Migration Error: ${process.env.SOURCE_ENV} → ${process.env.TARGET_ENV}`,
               body: `
-              # Error en Migración de Contentful
+              # Contentful Migration Error
               
-              ## Detalles
+              ## Details
               - **Source Environment:** ${process.env.SOURCE_ENV}
               - **Target Environment:** ${process.env.TARGET_ENV}
-              - **Run:** [Ver detalles](${process.env.RUN_URL})
+              - **Run:** [View details](${process.env.RUN_URL})
               
               ## Error
               \`\`\`
               ${process.env.ERROR_MESSAGE}
               \`\`\`
               
-              Por favor, revisa los logs del workflow para más detalles.
+              Please check the workflow logs for more details.
               `
             });
             
-            console.log(`Issue creado: ${issue.data.html_url}`);
+            console.log(`Issue created: ${issue.data.html_url}`);
         env:
           SOURCE_ENV: ${{ github.ref_name }}
           TARGET_ENV: ${{ steps.migration.outputs.target_env }}
           ERROR_MESSAGE: ${{ steps.migration.outputs.error }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-  # Job para promociones automáticas después de merge a develop
-  auto-promote-develop:
+  # Job para promociones automáticas después de merge a develop, qa, staging y main
+  auto-promote:
     if: |
       github.event_name == 'pull_request' && 
       github.event.pull_request.merged == true && 
-      github.base_ref == 'develop'
+      (github.base_ref == 'develop' || github.base_ref == 'qa' || github.base_ref == 'staging' || github.base_ref == 'main')
     runs-on: ubuntu-latest
     environment: 
-      name: develop
+      name: ${{ github.base_ref }}
       url: ${{ steps.migration.outputs.environment_url }}
     
     steps:
+      - name: Set source environment
+        id: set-source
+        run: |
+          if [ "${{ github.base_ref }}" = "qa" ]; then
+            echo "source_env=develop" >> $GITHUB_OUTPUT
+          elif [ "${{ github.base_ref }}" = "staging" ]; then
+            echo "source_env=qa" >> $GITHUB_OUTPUT
+          elif [ "${{ github.base_ref }}" = "main" ]; then
+            echo "source_env=staging" >> $GITHUB_OUTPUT
+          else
+            echo "source_env=${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch all history for proper tagging
-        
+
       - name: Run Contentful Migration
         id: migration
         uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: develop
+          source-environment: ${{ steps.set-source.outputs.source_env }}
           node-version: ${{ env.NODE_VERSION }}
           dry-run: false
           fail-on-error: true
           skip-if-no-changes: true
-          comment-on-pr: true
+          comment-on-pr: false
+          skip-validation: true
