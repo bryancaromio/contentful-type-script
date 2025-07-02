@@ -201,6 +201,27 @@ runs:
         PREVIEW_EXIT_CODE=${PIPESTATUS[0]}
         PREVIEW_OUTPUT=$(cat "$TEMP_OUTPUT_FILE")
         rm -f "$TEMP_OUTPUT_FILE"
+
+        # Extract script content
+        SCRIPT_CONTENT=""
+        if echo "$PREVIEW_OUTPUT" | grep -q "=== Script Content ==="; then
+          SCRIPT_CONTENT=$(echo "$PREVIEW_OUTPUT" | sed -n '/=== Script Content ===/,/=== End of Script ===/p')
+        fi
+        
+        # Add to job summary
+        echo "# Contentful Migration Preview 🔍" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Environment Promotion" >> $GITHUB_STEP_SUMMARY
+        echo "\`${{ inputs.source-environment }}\` → \`${{ steps.get-target.outputs.target_env }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Migration Script" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`javascript" >> $GITHUB_STEP_SUMMARY
+        if [ -n "$SCRIPT_CONTENT" ]; then
+          echo "$SCRIPT_CONTENT" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "No changes detected between environments." >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         
         # Check if changes were detected
         if echo "$PREVIEW_OUTPUT" | grep -q "No changes detected"; then
