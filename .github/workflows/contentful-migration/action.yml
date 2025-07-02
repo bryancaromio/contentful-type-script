@@ -95,13 +95,6 @@ runs:
         chmod 755 migrations
         touch migrations/.gitkeep
 
-    - name: Install jq
-      shell: bash
-      run: |
-        echo "📦 Installing jq..."
-        sudo apt-get update
-        sudo apt-get install -y jq
-
     - name: Get target environment
       shell: bash
       id: get-target
@@ -168,37 +161,13 @@ runs:
       env:
         CONTENTFUL_SPACE_ID: ${{ inputs.space-id }}
         CONTENTFUL_MANAGEMENT_TOKEN: ${{ inputs.management-token }}
-        KEEP_TEMP: 'true'
       run: |
         echo "🔍 Generating preview for environments:"
         echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
         
-        # Ensure temp directory exists and is clean
-        rm -rf temp
-        mkdir -p temp
-        chmod -R 755 temp
-        
         # Run preview and capture output
-        set -x  # Enable command echo for debugging
-        PREVIEW_OUTPUT=$(KEEP_TEMP=true pnpm run sync:preview -- "${{ inputs.source-environment }}" 2>&1)
+        PREVIEW_OUTPUT=$(pnpm run sync:preview -- "${{ inputs.source-environment }}" 2>&1)
         PREVIEW_EXIT_CODE=$?
-        set +x  # Disable command echo
-        
-        # Debug information
-        echo "Debug information:"
-        echo "- Working directory: $(pwd)"
-        if [ -d "temp" ]; then
-          echo "- Temp directory contents:"
-          ls -la temp/
-          echo "- Source environment export:"
-          cat temp/*-development-export.json | jq '.contentTypes | length'
-          echo "- Target environment export:"
-          cat temp/*-qa-export.json | jq '.contentTypes | length'
-        else
-          echo "⚠️ Temp directory not found"
-        fi
-        echo "- Migrations directory contents:"
-        ls -la migrations/
         
         # Check if changes were detected
         if echo "$PREVIEW_OUTPUT" | grep -q "No changes detected"; then
@@ -220,9 +189,6 @@ runs:
           echo "❌ Preview generation failed"
           exit 1
         fi
-        
-        # Clean up temp directory at the end
-        rm -rf temp
 
     - name: Comment PR
       if: |

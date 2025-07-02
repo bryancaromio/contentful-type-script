@@ -83,11 +83,6 @@ try {
   const sourceContent: ContentfulExport = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
   const targetContent: ContentfulExport = JSON.parse(fs.readFileSync(targetFile, 'utf8'));
 
-  console.log(`📊 Content types found:
-   - Source (${sourceEnv}): ${sourceContent.contentTypes?.length || 0} types
-   - Target (${targetEnv}): ${targetContent.contentTypes?.length || 0} types
-  `);
-
   // Generate migration script
   let migrationScript = `/**
  * Automatically generated migration
@@ -106,10 +101,7 @@ module.exports = function(migration) {
   const sourceContentTypes = sourceContent.contentTypes || [];
   const targetContentTypes = targetContent.contentTypes || [];
 
-  let hasChanges = false;
-
   if (sourceContentTypes.length === 0) {
-    console.log(`⚠️ No content types found in ${sourceEnv} environment`);
     migrationScript += `
   // No content types found in ${sourceEnv} environment
   console.log('No changes to apply');
@@ -121,8 +113,6 @@ module.exports = function(migration) {
       const targetType = targetContentTypes.find(t => t.sys.id === sourceType.sys.id);
       
       if (!targetType) {
-        hasChanges = true;
-        console.log(`✨ Found new content type: ${sourceType.name} (${sourceType.sys.id})`);
         // New content type
         migrationScript += `
   // Create new content type: ${sourceType.name}
@@ -149,12 +139,9 @@ module.exports = function(migration) {
         }
       } else {
         // Compare fields for existing content types
-        let hasChanges = false;
         sourceType.fields.forEach(sourceField => {
           const targetField = targetType.fields.find(f => f.id === sourceField.id);
           if (!targetField) {
-            console.log(`✨ Found new field: ${sourceField.name} (${sourceField.id}) in content type ${sourceType.name}`);
-            hasChanges = true;
             const validations = sourceField.validations ? JSON.stringify(sourceField.validations, null, 2) : '[]';
             migrationScript += `
   // Add new field to ${sourceType.name}
@@ -167,24 +154,8 @@ module.exports = function(migration) {
     .validations(${validations});\n`;
           }
         });
-        if (!hasChanges) {
-          console.log(`ℹ️ No changes detected for content type: ${sourceType.name}`);
-        }
       }
     });
-  }
-
-  if (!hasChanges) {
-    migrationScript += `
-  /**
-   * No differences found between environments:
-   * - Source: ${sourceEnv}
-   * - Target: ${targetEnv}
-   * 
-   * This script is generated but contains no changes.
-   */
-  console.log('No changes to apply');
-`;
   }
 
   migrationScript += `
@@ -195,9 +166,7 @@ module.exports = function(migration) {
   fs.writeFileSync(migrationFileName, migrationScript);
 
   // Clean up temporary files
-  if (process.env.KEEP_TEMP !== 'true') {
-    fs.rmSync('temp', { recursive: true, force: true });
-  }
+  fs.rmSync('temp', { recursive: true, force: true });
 
   console.log(`
 ✅ Migration generated successfully:
@@ -222,7 +191,7 @@ module.exports = function(migration) {
 `);
 
   // Clean up temporary files in case of error
-  if (process.env.KEEP_TEMP !== 'true' && fs.existsSync('temp')) {
+  if (fs.existsSync('temp')) {
     fs.rmSync('temp', { recursive: true, force: true });
   }
   process.exit(1);
