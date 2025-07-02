@@ -105,25 +105,25 @@ jobs:
             const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `❌ Error en migración de Contentful: ${process.env.SOURCE_ENV} → ${process.env.TARGET_ENV}`,
+              title: `❌ Contentful Migration Error: ${process.env.SOURCE_ENV} → ${process.env.TARGET_ENV}`,
               body: `
-              # Error en Migración de Contentful
+              # Contentful Migration Error
               
-              ## Detalles
+              ## Details
               - **Source Environment:** ${process.env.SOURCE_ENV}
               - **Target Environment:** ${process.env.TARGET_ENV}
-              - **Run:** [Ver detalles](${process.env.RUN_URL})
+              - **Run:** [View details](${process.env.RUN_URL})
               
               ## Error
               \`\`\`
               ${process.env.ERROR_MESSAGE}
               \`\`\`
               
-              Por favor, revisa los logs del workflow para más detalles.
+              Please check the workflow logs for more details.
               `
             });
             
-            console.log(`Issue creado: ${issue.data.html_url}`);
+            console.log(`Issue created: ${issue.data.html_url}`);
         env:
           SOURCE_ENV: ${{ github.ref_name }}
           TARGET_ENV: ${{ steps.migration.outputs.target_env }}
@@ -146,16 +146,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch all history for proper tagging
-        
+
       - name: Run Contentful Migration
         id: migration
         uses: ./.github/workflows/contentful-migration
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: develop
+          source-environment: ${{ github.base_ref }}
           node-version: ${{ env.NODE_VERSION }}
           dry-run: false
           fail-on-error: true
           skip-if-no-changes: true
-          comment-on-pr: true
+          comment-on-pr: false
+          skip-validation: true
