@@ -165,9 +165,24 @@ runs:
         echo "🔍 Generating preview for environments:"
         echo "   ${{ inputs.source-environment }} → ${{ steps.get-target.outputs.target_env }}"
         
+        # Ensure temp directory exists and is clean
+        rm -rf temp
+        mkdir -p temp
+        chmod -R 755 temp
+        
         # Run preview and capture output
+        set -x  # Enable command echo for debugging
         PREVIEW_OUTPUT=$(pnpm run sync:preview -- "${{ inputs.source-environment }}" 2>&1)
         PREVIEW_EXIT_CODE=$?
+        set +x  # Disable command echo
+        
+        # Debug information
+        echo "Debug information:"
+        echo "- Working directory: $(pwd)"
+        echo "- Temp directory contents:"
+        ls -la temp/
+        echo "- Migrations directory contents:"
+        ls -la migrations/
         
         # Check if changes were detected
         if echo "$PREVIEW_OUTPUT" | grep -q "No changes detected"; then
