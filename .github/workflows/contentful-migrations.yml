@@ -55,6 +55,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch all history for proper tagging
+          ref: ${{ github.head_ref }}
       
       - name: Validate migration files
         if: ${{ !github.event.inputs.skip_validation }}
@@ -74,6 +75,10 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Set PR Head Ref
+        run: |
+          echo "PR_HEAD_REF=${{ github.head_ref }}" >> $GITHUB_ENV
       
       - name: Run Contentful Migration
         id: migration
@@ -81,7 +86,7 @@ jobs:
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: ${{ github.head_ref }}
+          source-environment: ${{ env.PR_HEAD_REF }}
           node-version: ${{ env.NODE_VERSION }}
           dry-run: true
           fail-on-error: true
