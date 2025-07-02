@@ -40,7 +40,8 @@ jobs:
   validate-pr:
     if: |
       github.event_name == 'pull_request' && 
-      github.event.action != 'closed'
+      github.event.action != 'closed' &&
+      (github.base_ref == 'develop' || (github.base_ref == 'qa' && github.head_ref == 'develop'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -72,7 +73,7 @@ jobs:
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: ${{ github.head_ref }}
+          source-environment: ${{ github.base_ref }}
           node-version: ${{ env.NODE_VERSION }}
           dry-run: true # Siempre en modo preview para PRs
           fail-on-error: true
