@@ -81,7 +81,7 @@ jobs:
         with:
           space-id: ${{ secrets.CONTENTFUL_SPACE_ID }}
           management-token: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
-          source-environment: ${{ github.base_ref }}
+          source-environment: ${{ github.head_ref }}
           node-version: ${{ env.NODE_VERSION }}
           dry-run: true
           fail-on-error: true
